@@ -103,7 +103,8 @@ function Message() {
   const fetchAllChatrooms = async () => {
     const req = await fetch(`http://localhost:5000/chatrooms/${getUserId()}`)
     const d = await req.json()
-    console.log({ d })
+    // console.log({ d })
+    console.log("user is",getUserId())
     const roomIds = d.data.map((e) => e._id);
     setRooms(roomIds);
     senderData()
@@ -117,7 +118,7 @@ function Message() {
   const senderData = async (id) => {
     const req = await fetch(`http://localhost:5000/users/${getUserId()}`)
     const sender = await req.json()
-    console.log({ sender })
+    // console.log({ sender })
     return sender
   }
   const logger = () => {
@@ -152,7 +153,7 @@ function Message() {
                 'WebkitScrollbar': {
                   display: 'none'
                 },
-                '-msOverflowStyle': 'none',
+                'MsOverflowStyle': 'none',
                 'scrollbarWidth': 'none'
               }}
             >

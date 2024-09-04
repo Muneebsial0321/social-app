@@ -1,13 +1,16 @@
-import React, { useState,useRef,useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { CiMenuKebab, CiVideoOn, CiCalendar } from "react-icons/ci";
 import { GrGallery } from "react-icons/gr";
-import { FaMicrophone ,FaPaperPlane } from "react-icons/fa";
+import { FaMicrophone, FaPaperPlane } from "react-icons/fa";
 import { FaCamera, FaPaperclip, FaSmile } from 'react-icons/fa';
 import { Link, useLocation } from "react-router-dom";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import io from 'socket.io-client';
+
 
 function Message2() {
+  const socket = io(process.env.REACT_APP_API_BASE_URL); 
   const loc = useLocation()
   const [able, setAble] = useState(false);
   const [schedule, setSchedule] = useState(false);
@@ -16,9 +19,11 @@ function Message2() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [message, setMessage] = useState('');
   const [showCard, setShowCard] = useState(false);
-  const [chatroom,setChatroom] = useState()
-  const [receiver,setReceiver] = useState()
-  const [sender,setSender] = useState()
+  const [chatroom, setChatroom] = useState()
+  const [receiver, setReceiver] = useState()
+  const [sender, setSender] = useState({})
+  const [roomId, setRoomId] = useState({})
+  const [render, setRender] = useState(false);
 
   const cardRef = useRef(null);
 
@@ -27,66 +32,80 @@ function Message2() {
       setShowCard(false);
     }
   };
-  
-const getUserId = ()=>{
-  const str = document.cookie
-const userKey = str.split('=')[1];
-console.log({"chatter":userKey}); 
-return userKey
-}
-  
-
-  const fetchAllChatrooms = async(id) =>{
-    const req = await fetch(`http://localhost:5000/chatrooms/${id}`)
-    const d = await req.json()
-    const mess = d.data[0].messages
-    // console.log({mess})
-    setChatroom(mess)
-    console.log({chatroom})
- 
+  const getUserId = () => {
+    const str = document.cookie
+    const userKey = str.split('=')[1];
+    return userKey
   }
-  const getSenderName = async(id) =>{
+  const fetchChatroom = async (id) => {
+
+    let url = `http://localhost:5000/chatrooms/room/${id[0]}`
+    const req = await fetch(url)
+    const d = await req.json()
+    let sender = d.users.filter((e) => e !== getUserId())
+    getSenderName(sender[0])
+    console.log("roomId," ,id[0])
+    setRoomId(id[0])
+    // setRoomId(d._id)
+    // const mess = d.messages
+    // setChatroom(mess)
+
+  }
+  const getSenderName = async (id) => {
     const req = await fetch(`http://localhost:5000/users/${id}`)
     const d = await req.json()
-      return await d.name
- 
+    getReceiver()
+    setSender(d)
+
   }
-  // const getReceiver = async(id) =>{
-  //   const req = await fetch(`http://localhost:5000/users/${id}`)
-  //   const d = await req.json()
-  //    setReceiver(d)
- 
-  // }
+  const getReceiver = async () => {
+    const req = await fetch(`http://localhost:5000/users/${getUserId()}`)
+    const d = await req.json()
+    setReceiver(d)
 
- 
-  const mapper = async () => {
-    if (!chatroom) return;
+  }
+  const joinRoom = (id) => {
+    // if (roomId && userId) {
+      socket.off('connection', '');
+      console.log("join room rrom id")
+         console.log(id[0])
+      socket.on('connection',(socket_)=>{console.log("propbaly working")})
+      socket.emit('joinRoom', { roomId:id[0],userId:getUserId() });
+      socket.on('pos', (socket)=>{console.log("room joinded",socket);});
+    // }
+  };
 
-    const senderIds = chatroom.map((e) => e.sender);
-    
-    // Fetch all names asynchronously
-    const names = await Promise.all(senderIds.map((id) => getSenderName(id)));
-    console.log(names)
-    getSenderName(names); 
-    setChatroom((prev)=>[...prev,names])
-    console.log({chatroom})
-    // Store fetched names in state
+  const sendMessage = () => {
+    // if (message && roomId && userId) {
+      socket.emit('sendMessage', { roomId, sender: getUserId(), message });
+      // setMessage('');
+    // }
   };
 
   useEffect(() => {
-    getUserId()
-    const fetchData = async () => {
-      await fetchAllChatrooms(loc.state.id.user.Users_PK);
-      await mapper();  // Call mapper after fetching chatrooms
-    };
-    fetchData();
+    fetchChatroom(loc.state.id.room)
+    joinRoom(loc.state.id.room)
+    socket.on('connection',(socket_)=>{console.log("working well")})
+    socket.on('receiveMessage', (message) => {
+      console.log("receving message")
+      console.log(message)
+      setChatroom((prevMessages) => [...prevMessages, message]);
+    });
+    socket.on('previousMessages', (previousMessages) => {
+      console.log('precious messages')
+      console.log(previousMessages)
+      setChatroom(previousMessages);
+    });
+
+   
+   
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
+      socket.off('receiveMessage');
+      socket.off('previousMessages');
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [loc.state.id.user.Users_PK]);  // Depend on the user PK
-
-
+  }, []);  // Depend on the user PK
   const handleInputChange = (e) => {
     setMessage(e.target.value);
   };
@@ -95,11 +114,9 @@ return userKey
     setMeeting(false); // Reset meeting state when schedule is toggled
     setShowCalendar(false); // Hide calendar if visible
   };
-
   const handleMeeting = () => {
     setMeeting(!meeting);
   };
-
   const handleCalendar = () => {
     setShowCalendar(!showCalendar);
     setSchedule(false); // Hide schedule card if visible
@@ -112,10 +129,10 @@ return userKey
       <div className="div h-full w-[100%] bg-[#f5f3f3] p-5 relative">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <p className="text-base font-medium whitespace-nowrap">Haroon Yaseen</p>
-            <p className="text-[rgb(128,128,128)] text-xs">
+            <p className="text-base font-medium whitespace-nowrap">{sender.name}</p>
+            {/* <p className="text-[rgb(128,128,128)] text-xs">
               Last Online 39 min ago
-            </p>
+            </p> */}
           </div>
           <div className="flex gap-5">
             <CiMenuKebab
@@ -139,7 +156,7 @@ return userKey
                 className="absolute w-[200px] cursor-pointer right-4 top-14 px-3 py-1 z-30 bg-white shadow-lg border"
                 onClick={(e) => e.stopPropagation()}
               >
-                <p className="text-lg opacity-75"  onClick={handleMeeting}>
+                <p className="text-lg opacity-75" onClick={handleMeeting}>
                   Schedule a meeting
                 </p>
                 {meeting && (
@@ -174,64 +191,66 @@ return userKey
         </div>
         <div className=" h-[70%] overflow-y-scroll Podcast_Top_Videos">
 
-        {/* message component */}
-         {chatroom && chatroom.map((e,i)=>{ 
-          return <div key={i} className="flex items-end justify-between py-2">
+          {/* message component */}
+          {chatroom && chatroom.map((e, i) => {
+            return <div key={i} className="flex items-end justify-between py-2">
               <div className="flex  gap-2">
                 <img
-                  src="https://media.istockphoto.com/id/1682296067/photo/happy-studio-portrait-or-professional-man-real-estate-agent-or-asian-businessman-smile-for.webp?b=1&s=170667a&w=0&k=20&c=V-RXoAk73ljzQZd0w_JcCFG-jlYs6sjpcrIZQ1TersQ="
+                  src={(getUserId() !== e.sender) ? sender.picUrl : receiver && receiver.picUrl}
+                  // src={(getUserId()!==e.sender)?sender.picUrl:"https://media.istockphoto.com/id/1682296067/photo/happy-studio-portrait-or-professional-man-real-estate-agent-or-asian-businessman-smile-for.webp?b=1&s=170667a&w=0&k=20&c=V-RXoAk73ljzQZd0w_JcCFG-jlYs6sjpcrIZQ1TersQ="}
                   alt=""
                   className="h-[30px] w-[30px] rounded-full"
                 />
                 <div className="flex ">
                   <div className="div">
-                    {/* <p className="text-sm font-medium">{getSenderName(e.sender)}</p> */}
-                
+                    <p className="text-sm font-medium">{e.sender !== getUserId() ? sender.name : "You"}</p>
+
                     <p className="text-[#686868] text-xs mt-3">
-                     {e.message}
+                      {e.message}
                     </p>
                   </div>
                 </div>
               </div>
               <p className="text-[gray] text-[10px]">6:42PM</p>
-            </div>})}
-        {/* message component */}
+            </div>
+          })}
+          {/* message component */}
 
-           
+
+        </div>
+        <div className="flex items-center justify-center w-[95%] relative top-4 ">
+          <GrGallery className="text-[#7979ec] text-xl mr-3 cursor-pointer" onClick={toggleCard} />
+
+          <div className="flex-grow">
+            <input
+              type="text"
+              onChange={handleInputChange}
+              placeholder="Write a message"
+              className="h-[5vh] w-full outline-none rounded p-4 bg-transparent border"
+            />
           </div>
-          <div className="flex items-center justify-center w-[95%] relative top-4 ">
-  <GrGallery className="text-[#7979ec] text-xl mr-3 cursor-pointer"onClick={toggleCard} />
-  
-  <div className="flex-grow">
-    <input
-      type="text"
-      onChange={handleInputChange}
-      placeholder="Write a message"
-      className="h-[5vh] w-full outline-none rounded p-4 bg-transparent border"
-    />
-  </div>
-  {message.trim() ? (
-        <FaPaperPlane className="text-xl text-[gray] ml-3 cursor-pointer" />
-      ) : (
-        <FaMicrophone className="text-xl text-[gray] ml-3" />
-      )}
-</div>
+          {message.trim() ? (
+            <FaPaperPlane onClick={sendMessage} className="text-xl text-[gray] ml-3 cursor-pointer" />
+          ) : (
+            <FaMicrophone className="text-xl text-[gray] ml-3" />
+          )}
+        </div>
 
-    {showCard && (
-      <div ref={cardRef} className="absolute bottom-[8vh] left-5 w-[10vw] p-3 bg-white shadow-lg rounded">
-        <ul className="space-y-3">
-          <li className="flex items-center">
-            <span className=""><FaCamera className="text-[gray]  cursor-pointer" /></span>
-          </li>
-          <li className="flex items-center">
-            <span className="icon"><FaPaperclip className="text-[gray]  cursor-pointer"/></span>
-          </li>
-          <li className="flex items-center">
-            <span className="icon"><FaSmile className="text-[gray] cursor-pointer"/></span>
-          </li>
-        </ul>
-      </div>
-    )}
+        {showCard && (
+          <div ref={cardRef} className="absolute bottom-[8vh] left-5 w-[10vw] p-3 bg-white shadow-lg rounded">
+            <ul className="space-y-3">
+              <li className="flex items-center">
+                <span className=""><FaCamera className="text-[gray]  cursor-pointer" /></span>
+              </li>
+              <li className="flex items-center">
+                <span className="icon"><FaPaperclip className="text-[gray]  cursor-pointer" /></span>
+              </li>
+              <li className="flex items-center">
+                <span className="icon"><FaSmile className="text-[gray] cursor-pointer" /></span>
+              </li>
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
