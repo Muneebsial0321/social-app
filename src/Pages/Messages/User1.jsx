@@ -28,6 +28,13 @@ function Message2() {
     }
   };
   
+const getUserId = ()=>{
+  const str = document.cookie
+const userKey = str.split('=')[1];
+console.log({"chatter":userKey}); 
+return userKey
+}
+  
 
   const fetchAllChatrooms = async(id) =>{
     const req = await fetch(`http://localhost:5000/chatrooms/${id}`)
@@ -67,6 +74,7 @@ function Message2() {
   };
 
   useEffect(() => {
+    getUserId()
     const fetchData = async () => {
       await fetchAllChatrooms(loc.state.id.user.Users_PK);
       await mapper();  // Call mapper after fetching chatrooms
